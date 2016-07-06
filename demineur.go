@@ -25,12 +25,13 @@ var (
 		mines      int
 		difficulty int
 		fullscreen bool
-		cheat      bool
+		invincible bool
 	}
 
 	elapsed time.Duration
 	ticker  *time.Ticker
 	grid    *Grid
+	view    bool
 
 	window   *sdl.Window
 	renderer *sdl.Renderer
@@ -75,21 +76,27 @@ func main() {
 
 func play() {
 	defer func() {
-		if r := recover(); r != nil && r != "reset" {
+		if r := recover(); r != nil {
+			if r == "reset" {
+				reset()
+				return
+			}
 			panic(r)
 		}
 	}()
 
-	event('p')
-	update()
-	blit()
+	for {
+		event('p')
+		update()
+		blit()
+	}
 }
 
 func parseFlags() {
 	conf.assets = filepath.Join(sdl.GetBasePath(), "assets")
 	flag.StringVar(&conf.assets, "assets", conf.assets, "assets directory")
 	flag.BoolVar(&conf.fullscreen, "fullscreen", false, "fullscreen mode")
-	flag.BoolVar(&conf.cheat, "cheat", false, "invincible to mines")
+	flag.BoolVar(&conf.invincible, "invincible", false, "invincible to mines")
 	str := fmt.Sprintf("difficulty level [0-%v] (easiest to hardest)", len(levels)-1)
 	flag.IntVar(&conf.difficulty, "difficulty", len(levels)/2, str)
 	flag.Parse()
@@ -191,6 +198,7 @@ func reset() {
 	}
 	ticker = time.NewTicker(1 * time.Second)
 
+	view = false
 	grid = newGrid(conf.width, conf.height, conf.mines)
 	grid.Draw()
 }
@@ -208,13 +216,20 @@ func event(state int) {
 			switch ev.Sym {
 			case sdl.K_ESCAPE:
 				os.Exit(0)
+			case sdl.K_BACKSPACE:
+				toggleInvincible()
+			case sdl.K_RETURN:
+				unmask()
 			case sdl.K_SPACE:
-				reset()
 				panic("reset")
 			}
 		case sdl.MouseButtonUpEvent:
 			if state == 'p' {
 				step(ev)
+			}
+		case sdl.MouseWheelEvent:
+			if ev.Y != 0 {
+				toggleInvincible()
 			}
 		}
 	}
@@ -236,9 +251,12 @@ func step(ev sdl.MouseButtonUpEvent) {
 		}
 
 		flip(fill(x, y))
-		if !conf.cheat && s.Value == 9 {
+		if !conf.invincible && s.Value == 9 {
 			over('l', x, y)
 		}
+
+	case 2:
+		unmask()
 
 	case 3:
 		s.Warn = !s.Warn
@@ -248,6 +266,21 @@ func step(ev sdl.MouseButtonUpEvent) {
 			idraw(s, blue)
 		}
 	}
+}
+
+func toggleInvincible() {
+	conf.invincible = !conf.invincible
+	sdl.Log("Invincibility: %v", conf.invincible)
+}
+
+func unmask() {
+	p := grid.Squares[:][:]
+	for y := 0; y < len(p); y++ {
+		for x := 0; x < len(p[y]); x++ {
+			show(fill(x, y))
+		}
+	}
+	view = true
 }
 
 func fill(x, y int) []image.Point {
@@ -304,6 +337,11 @@ func flip(p []image.Point) {
 	}
 	delay(100)
 
+	show(p)
+}
+
+func show(p []image.Point) {
+	g := grid
 	for _, p := range p {
 		s := g.Get(p.X, p.Y)
 		n := s.Value
@@ -351,18 +389,20 @@ func over(state, x, y int) {
 		result = text.win
 	}
 
-	r := result.Bounds()
-	rw, rh := r.Dx(), r.Dy()
-	rx := (conf.width*30 - rw) / 2
-	ry := (conf.height*30 - rh - 20) / 2
-	draw.Draw(canvas, image.Rect(rx, ry, rx+rw, ry+rh), result, image.ZP, draw.Over)
+	if !view {
+		r := result.Bounds()
+		rw, rh := r.Dx(), r.Dy()
+		rx := (conf.width*30 - rw) / 2
+		ry := (conf.height*30 - rh - 20) / 2
+		draw.Draw(canvas, image.Rect(rx, ry, rx+rw, ry+rh), result, image.ZP, draw.Over)
 
-	h := rh + 60
-	r = text.restart.Bounds()
-	rw, rh = r.Dx(), r.Dy()
-	rx = (conf.width*30 - rw) / 2
-	ry = (conf.height*30 - rh - 20 + h) / 2
-	draw.Draw(canvas, image.Rect(rx, ry, rx+rw, ry+rh), text.restart, image.ZP, draw.Over)
+		h := rh + 60
+		r = text.restart.Bounds()
+		rw, rh = r.Dx(), r.Dy()
+		rx = (conf.width*30 - rw) / 2
+		ry = (conf.height*30 - rh - 20 + h) / 2
+		draw.Draw(canvas, image.Rect(rx, ry, rx+rw, ry+rh), text.restart, image.ZP, draw.Over)
+	}
 
 	for {
 		delay(1e5)
