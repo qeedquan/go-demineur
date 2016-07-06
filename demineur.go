@@ -277,6 +277,7 @@ func unmask() {
 	p := grid.Squares[:][:]
 	for y := 0; y < len(p); y++ {
 		for x := 0; x < len(p[y]); x++ {
+			p[y][x].Warn = false
 			show(fill(x, y))
 		}
 	}
