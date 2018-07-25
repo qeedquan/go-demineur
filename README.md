@@ -5,6 +5,6 @@
 Ported from http://joel-murielle.perso.sfr.fr/demineur.zip
 
 Features Added:
-Resizable window
-Invincibility cheat
-Difficulties
+ * Resizable window
+ * Invincibility cheat
+ * Difficulties
